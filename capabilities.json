@@ -1,0 +1,155 @@
+{
+    "dataRoles": [
+        {
+            "displayName": "Company",
+            "name": "Company",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Event Type",
+            "name": "EventType",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Description",
+            "name": "Description",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Event Start Date",
+            "name": "EventStartDate",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Event End Date",
+            "name": "EventEndDate",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "MoA",
+            "name": "MoA",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Region",
+            "name": "Region",
+            "kind": "Grouping"
+        },
+        {
+            "displayName": "Product Name",
+            "name": "ProductName",
+            "kind": "Grouping"
+        }
+    ],
+    "dataViewMappings": [
+        {
+            "table": {
+                "rows": {
+                    "select": [
+                        {
+                            "for": {
+                                "in": "Company"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "EventType"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "Description"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "EventStartDate"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "EventEndDate"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "MoA"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "Region"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "ProductName"
+                            }
+                        }
+                    ]
+                },
+                "columns": {
+                    "select": [
+                        {
+                            "for": {
+                                "in": "Company"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "EventType"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "Description"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "EventStartDate"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "EventEndDate"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "MoA"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "Region"
+                            }
+                        },
+                        {
+                            "for": {
+                                "in": "ProductName"
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "objects": {
+        "timeline": {
+            "displayName": "Timeline Settings",
+            "properties": {
+                "title": {
+                    "displayName": "Title",
+                    "type": {
+                        "text": true
+                    }
+                }
+            }
+        }
+    },
+    "sorting": {
+        "default": {}
+    },
+    "suppressDefaultTitle": true
+}
