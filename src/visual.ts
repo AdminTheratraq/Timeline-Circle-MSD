@@ -42,7 +42,6 @@ import * as d3 from 'd3';
 import { VisualSettings } from "./settings";
 import * as sanitizeHtml from 'sanitize-html';
 
-/*Row Item */
 export interface TimelineData {
     Company: String;
     EventType: string;
@@ -54,14 +53,13 @@ export interface TimelineData {
     ProductName: String;
 }
 
-/*projects by group*/
 export interface Timelines {
     Timeline: TimelineData[];
 }
 
 export function logExceptions(): MethodDecorator {
-    return function (target: Object, propertyKey: string, descriptor: TypedPropertyDescriptor<any>)
-        : TypedPropertyDescriptor<any> {
+    return (target: Object, propertyKey: string, descriptor: TypedPropertyDescriptor<any>)
+        : TypedPropertyDescriptor<any> => {
 
         return {
             value: function () {
@@ -97,6 +95,10 @@ export class Visual implements IVisual {
     private host: IVisualHost;
     private initLoad = false;
     private events: IVisualEventService;
+    private xScale: d3.ScaleTime<number, number>;
+    private yScale: d3.ScaleLinear<number, number>;
+    private gbox: d3.Selection<SVGElement, any, any, any>;
+    private colors: any[];
 
     constructor(options: VisualConstructorOptions) {
         console.log('Visual Constructor', options);
@@ -120,7 +122,7 @@ export class Visual implements IVisual {
         let gHeight = vpHeight - this.margin.top - this.margin.bottom;
         let gWidth = vpWidth - this.margin.left - this.margin.right;
 
-        let timelineData = Visual.converter(options.dataViews[0], this.host);
+        let timelineData = Visual.CONVERTER(options.dataViews[0], this.host);
         let minDate, maxDate;
 
         minDate = new Date(Math.min.apply(null, timelineData.map(d => d.EventStartDate)));
@@ -130,108 +132,7 @@ export class Visual implements IVisual {
 
         let months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
-        let colors = [
-            {
-                dark: '#3F5003',
-                light: '#D0E987',
-                medium: '#AFD045'
-            },
-            {
-                dark: '#252D48',
-                light: '#81909F',
-                medium: '#3B4D64'
-            },
-            {
-                dark: '#8D4F0F',
-                light: '#D8A26D',
-                medium: '#C87825'
-            },
-            {
-                dark: '#337779',
-                light: '#B2DFE0',
-                medium: '#6FCBCC'
-            },
-            {
-                dark: '#003366',
-                light: '#66ffff',
-                medium: '#4791AE'
-            },
-            {
-                dark: 'rgba(49, 27, 146,1)',
-                light: 'rgba(49, 27, 146,0.2)',
-                medium: 'rgba(49, 27, 146,0.5)'
-            },
-            {
-                dark: 'rgba(245, 127, 23,1)',
-                light: 'rgba(245, 127, 23,0.2)',
-                medium: 'rgba(245, 127, 23,0.5)'
-            },
-            {
-                dark: 'rgba(183, 28, 28,1)',
-                light: 'rgba(183, 28, 28,0.2)',
-                medium: 'rgba(183, 28, 28,0.5)'
-            },
-            {
-                dark: 'rgba(136, 14, 79,1)',
-                light: 'rgba(136, 14, 79,0.2)',
-                medium: 'rgba(136, 14, 79,0.5)'
-            },
-            {
-                dark: 'rgba(27, 94, 32,1)',
-                light: 'rgba(27, 94, 32,0.2)',
-                medium: 'rgba(27, 94, 32,0.5)'
-            },
-            {
-                dark: 'rgba(255, 0, 0,1)',
-                light: 'rgba(255, 0, 0,0.2)',
-                medium: 'rgba(255, 0, 0,0.5)'
-            },
-            {
-                dark: 'rgba(0, 0, 255,1)',
-                light: 'rgba(0, 0, 255,0.2)',
-                medium: 'rgba(0, 0, 255,0.5)'
-            },
-            {
-                dark: 'rgba(0, 255, 0,1)',
-                light: 'rgba(0, 255, 0,0.2)',
-                medium: 'rgba(0, 255, 0,0.5)'
-            },
-            {
-                dark: 'rgba(94, 89, 27,1)',
-                light: 'rgba(94, 89, 27,0.2)',
-                medium: 'rgba(94, 89, 27,0.5)'
-            },
-            {
-                dark: 'rgba(27, 94, 91,1)',
-                light: 'rgba(27, 94, 91,0.2)',
-                medium: 'rgba(27, 94, 91,0.5)'
-            },
-            {
-                dark: 'rgba(11, 101, 153,1)',
-                light: 'rgba(11, 101, 153,0.2)',
-                medium: 'rgba(11, 101, 153,0.5)'
-            },
-            {
-                dark: 'rgba(11, 45, 153,1)',
-                light: 'rgba(11, 45, 153,0.2)',
-                medium: 'rgba(11, 45, 153,0.5)'
-            },
-            {
-                dark: 'rgba(114, 11, 153,1)',
-                light: 'rgba(114, 11, 153,0.2)',
-                medium: 'rgba(114, 11, 153,0.5)'
-            },
-            {
-                dark: 'rgba(153, 11, 134,1)',
-                light: 'rgba(153, 11, 134,0.2)',
-                medium: 'rgba(153, 11, 134,0.5)'
-            },
-            {
-                dark: 'rgba(249, 5, 134,1)',
-                light: 'rgba(249, 5, 134,0.2)',
-                medium: 'rgba(249, 5, 134,0.5)'
-            }
-        ];
+        let colors = this.getColors();
 
         let companyData = timelineData.map(d => d.Company).filter((v, i, self) => self.indexOf(v) === i);
         let companyColorData = companyData.map((d, i) => {
@@ -241,38 +142,145 @@ export class Visual implements IVisual {
             };
         });
 
-        let xScale = d3.scaleTime()
+        this.renderXandYAxis(minDate, maxDate, gWidth, gHeight);
+
+        this.renderTitle(options, gWidth);
+
+        this.defineSVGDefs(companyColorData);
+
+        this.renderXAxisCirclesAndQuarters();
+
+        this.renderTimeRangeLines(timelineData, gHeight);
+
+        this.renderCircles(timelineData, companyColorData);
+
+        this.renderEllipses(companyColorData);
+
+        this.renderText(companyColorData);
+
+        this.handleHyperLinkClick();
+
+        this.renderVisualBorder(options);
+
+        this.events.renderingFinished(options);
+    }
+
+    private getColors() {
+        return [{
+            dark: '#3F5003',
+            light: '#D0E987',
+            medium: '#AFD045'
+        }, {
+            dark: '#252D48',
+            light: '#81909F',
+            medium: '#3B4D64'
+        }, {
+            dark: '#8D4F0F',
+            light: '#D8A26D',
+            medium: '#C87825'
+        }, {
+            dark: '#337779',
+            light: '#B2DFE0',
+            medium: '#6FCBCC'
+        }, {
+            dark: '#003366',
+            light: '#66ffff',
+            medium: '#4791AE'
+        }, {
+            dark: 'rgba(49, 27, 146,1)',
+            light: 'rgba(49, 27, 146,0.2)',
+            medium: 'rgba(49, 27, 146,0.5)'
+        }, {
+            dark: 'rgba(245, 127, 23,1)',
+            light: 'rgba(245, 127, 23,0.2)',
+            medium: 'rgba(245, 127, 23,0.5)'
+        }, {
+            dark: 'rgba(183, 28, 28,1)',
+            light: 'rgba(183, 28, 28,0.2)',
+            medium: 'rgba(183, 28, 28,0.5)'
+        }, {
+            dark: 'rgba(136, 14, 79,1)',
+            light: 'rgba(136, 14, 79,0.2)',
+            medium: 'rgba(136, 14, 79,0.5)'
+        }, {
+            dark: 'rgba(27, 94, 32,1)',
+            light: 'rgba(27, 94, 32,0.2)',
+            medium: 'rgba(27, 94, 32,0.5)'
+        }, {
+            dark: 'rgba(255, 0, 0,1)',
+            light: 'rgba(255, 0, 0,0.2)',
+            medium: 'rgba(255, 0, 0,0.5)'
+        }, {
+            dark: 'rgba(0, 0, 255,1)',
+            light: 'rgba(0, 0, 255,0.2)',
+            medium: 'rgba(0, 0, 255,0.5)'
+        }, {
+            dark: 'rgba(0, 255, 0,1)',
+            light: 'rgba(0, 255, 0,0.2)',
+            medium: 'rgba(0, 255, 0,0.5)'
+        }, {
+            dark: 'rgba(94, 89, 27,1)',
+            light: 'rgba(94, 89, 27,0.2)',
+            medium: 'rgba(94, 89, 27,0.5)'
+        }, {
+            dark: 'rgba(27, 94, 91,1)',
+            light: 'rgba(27, 94, 91,0.2)',
+            medium: 'rgba(27, 94, 91,0.5)'
+        }, {
+            dark: 'rgba(11, 101, 153,1)',
+            light: 'rgba(11, 101, 153,0.2)',
+            medium: 'rgba(11, 101, 153,0.5)'
+        }, {
+            dark: 'rgba(11, 45, 153,1)',
+            light: 'rgba(11, 45, 153,0.2)',
+            medium: 'rgba(11, 45, 153,0.5)'
+        }, {
+            dark: 'rgba(114, 11, 153,1)',
+            light: 'rgba(114, 11, 153,0.2)',
+            medium: 'rgba(114, 11, 153,0.5)'
+        }, {
+            dark: 'rgba(153, 11, 134,1)',
+            light: 'rgba(153, 11, 134,0.2)',
+            medium: 'rgba(153, 11, 134,0.5)'
+        }, {
+            dark: 'rgba(249, 5, 134,1)',
+            light: 'rgba(249, 5, 134,0.2)',
+            medium: 'rgba(249, 5, 134,0.5)'
+        }];
+    }
+
+    private renderXandYAxis(minDate, maxDate, gWidth, gHeight) {
+        let xAxis;
+        this.xScale = d3.scaleTime()
             .domain([minDate, maxDate])
             .range([this.margin.left, gWidth]);
 
-        let xAxis;
-
         if (this.diff_years(minDate, maxDate) <= 1) {
-            xAxis = d3.axisBottom(xScale)
+            xAxis = d3.axisBottom(this.xScale)
                 .ticks(d3.timeMonth, 1)
                 .tickPadding(20)
                 .tickFormat(d3.timeFormat("%b'%y"))
                 .tickSize(-10);
         }
         else {
-            xAxis = d3.axisBottom(xScale)
+            xAxis = d3.axisBottom(this.xScale)
                 .ticks(d3.timeYear, 1)
                 .tickPadding(20)
                 .tickFormat(d3.timeFormat('%Y'))
                 .tickSize(-10);
         }
 
-        let xAxisAllTicks = d3.axisBottom(xScale)
+        let xAxisAllTicks = d3.axisBottom(this.xScale)
             .ticks(d3.timeMonth, 3)
             .tickPadding(20)
             .tickFormat(d3.timeFormat(""))
             .tickSize(10);
 
-        let yScale = d3.scaleLinear()
+        this.yScale = d3.scaleLinear()
             .domain([-100, 100])
             .range([gHeight, this.margin.top]);
 
-        let yAxis = d3.axisLeft(yScale);
+        let yAxis = d3.axisLeft(this.yScale);
 
         let xAxisLineAllTicks = this.svg.append("g")
             .attr("class", "x-axis-line-allticks")
@@ -287,7 +295,9 @@ export class Visual implements IVisual {
         this.svg.append("g")
             .attr("class", "y-axis")
             .call(yAxis).attr('display', 'none');
+    }
 
+    private renderTitle(options, gWidth) {
         let gTitle = this.svg.append('g')
             .attr('x', 0)
             .attr('y', 0)
@@ -304,7 +314,9 @@ export class Visual implements IVisual {
             .attr('fill', '#ffffff')
             .attr('font-size', 24)
             .attr('transform', 'translate(' + ((gWidth + 70) / 2 - 104) + ',25)');
+    }
 
+    private defineSVGDefs(companyColorData) {
         let svgDefs = this.svg.append('defs');
 
         companyColorData.forEach((c, i) => {
@@ -334,14 +346,16 @@ export class Visual implements IVisual {
                 .attr('stop-color', c.color.dark)
                 .attr('offset', '1');
         });
+    }
 
+    private renderXAxisCirclesAndQuarters() {
         let year, darkGrey = '#636363', lightGrey = '#868686', color = '#868686';
         this.svg.selectAll('.x-axis-line-allticks .tick').insert('rect')
             .attr('x', 0)
             .attr('y', -25)
             .attr('width', '25%')
             .attr('height', 50)
-            .attr('fill', function (d: Date, i) {
+            .attr('fill', (d: Date, i) => {
                 if (i % 4 !== 0) {
                     return color;
                 }
@@ -371,47 +385,49 @@ export class Visual implements IVisual {
         this.svg.selectAll('.x-axis-line .tick text')
             .attr('y', -5)
             .attr('fill', '#000000').raise();
+    }
 
+    private renderTimeRangeLines(timelineData, gHeight) {
         this.svg.selectAll(".line")
             .data(timelineData)
             .enter()
             .append("rect")
-            .attr("x", function (d, i) {
-                return xScale(d.EventStartDate) + 20;
+            .attr("x", (d: TimelineData, i) => {
+                return this.xScale(d.EventStartDate) + 20;
             })
             .attr("width", '8px')
-            .attr("y", function (d, i) {
+            .attr("y", (d, i) => {
                 if (i % 2 === 0) {
-                    return yScale(-34);
+                    return this.yScale(-34);
                 } else {
                     let count = Math.ceil(i / 2);
                     if (count % 2 === 0) {
-                        return yScale(54);
+                        return this.yScale(54);
                     } else {
-                        return yScale(14);
+                        return this.yScale(14);
                     }
                 }
             })
-            .attr("height", function (d, i) {
+            .attr("height", (d, i) => {
                 if (i % 2 === 0) {
                     let count = i / 2;
                     if (count % 2 === 0) {
-                        return gHeight - yScale(-40);
+                        return gHeight - this.yScale(-40);
                     }
                     else {
-                        return gHeight - yScale(-80);
+                        return gHeight - this.yScale(-80);
                     }
                 } else {
                     let count = Math.ceil(i / 2);
                     if (count % 2 === 0) {
-                        return gHeight - yScale(-40);
+                        return gHeight - this.yScale(-40);
                     }
                     else {
-                        return gHeight - yScale(-80);
+                        return gHeight - this.yScale(-80);
                     }
                 }
             })
-            .style('fill', function (d, i) {
+            .style('fill', (d: TimelineData, i) => {
                 if (i % 2 === 0) {
                     return 'url(#linearGradientTopToBottom' + d.Company.replace(/ /g, "") + ')';
                 }
@@ -424,42 +440,42 @@ export class Visual implements IVisual {
             .data(timelineData)
             .enter()
             .append("rect")
-            .attr("x", function (d, i) {
-                return xScale(d.EventEndDate) + 20;
+            .attr("x", (d: TimelineData, i) => {
+                return this.xScale(d.EventEndDate) + 20;
             })
             .attr("width", '8px')
-            .attr("y", function (d, i) {
+            .attr("y", (d, i) => {
                 if (i % 2 === 0) {
-                    return yScale(-34);
+                    return this.yScale(-34);
                 } else {
                     let count = Math.ceil(i / 2);
                     if (count % 2 === 0) {
-                        return yScale(54);
+                        return this.yScale(54);
                     } else {
-                        return yScale(14);
+                        return this.yScale(14);
                     }
                 }
             })
-            .attr("height", function (d, i) {
+            .attr("height", (d, i) => {
                 if (i % 2 === 0) {
                     let count = i / 2;
                     if (count % 2 === 0) {
-                        return gHeight - yScale(-40);
+                        return gHeight - this.yScale(-40);
                     }
                     else {
-                        return gHeight - yScale(-80);
+                        return gHeight - this.yScale(-80);
                     }
                 } else {
                     let count = Math.ceil(i / 2);
                     if (count % 2 === 0) {
-                        return gHeight - yScale(-40);
+                        return gHeight - this.yScale(-40);
                     }
                     else {
-                        return gHeight - yScale(-80);
+                        return gHeight - this.yScale(-80);
                     }
                 }
             })
-            .style('fill', function (d, i) {
+            .style('fill', (d: TimelineData, i) => {
                 if (i % 2 === 0) {
                     return 'url(#linearGradientTopToBottom' + d.Company.replace(/ /g, "") + ')';
                 }
@@ -467,12 +483,14 @@ export class Visual implements IVisual {
                     return 'url(#linearGradientBottomToTop' + d.Company.replace(/ /g, "") + ')';
                 }
             });
+    }
 
-        let gbox = this.svg.selectAll(".box")
+    private renderCircles(timelineData, companyColorData) {
+        this.gbox = this.svg.selectAll(".box")
             .data(timelineData)
             .enter()
             .append("g")
-            .attr('class', function (d, i) {
+            .attr('class', (d: TimelineData, i) => {
                 if (d.EventType === 'Regulatory') {
                     return 'rect regulatory';
                 }
@@ -484,29 +502,29 @@ export class Visual implements IVisual {
                 }
             })
             .attr('fill', '#ffffff')
-            .attr('transform', function (d, i) {
+            .attr('transform', (d: TimelineData, i) => {
                 let y;
                 if ((i % 2) === 0) {
                     let count = i / 2;
                     if (count % 2 === 0) {
-                        y = yScale(-118);
+                        y = this.yScale(-118);
                     } else {
-                        y = yScale(-79);
+                        y = this.yScale(-79);
                     }
                 } else {
                     let count = Math.ceil(i / 2);
                     if (count % 2 === 0) {
-                        y = yScale(80);
+                        y = this.yScale(80);
                     } else {
-                        y = yScale(40);
+                        y = this.yScale(40);
                     }
                 }
-                return 'translate(' + (xScale(d.EventStartDate) + 25) + ' ' + y + ')';
+                return 'translate(' + (this.xScale(d.EventStartDate) + 25) + ' ' + y + ')';
             });
 
-        gbox.selectAll('g')
+        this.gbox.selectAll('g')
             .data((d: any, i) => {
-                let diff = ((xScale(d.EventEndDate) + 25) - (xScale(d.EventStartDate) + 25));
+                let diff = ((this.xScale(d.EventEndDate) + 25) - (this.xScale(d.EventStartDate) + 25));
                 if (d.EventStartDate.getTime() === d.EventEndDate.getTime() || diff <= 35) {
                     return [d];
                 }
@@ -516,8 +534,8 @@ export class Visual implements IVisual {
             })
             .enter()
             .append("circle")
-            .attr("cx", function (d) {
-                let diff = ((xScale(d.EventEndDate) + 25) - (xScale(d.EventStartDate) + 25));
+            .attr("cx", (d) => {
+                let diff = ((this.xScale(d.EventEndDate) + 25) - (this.xScale(d.EventStartDate) + 25));
                 if (d.EventStartDate.getTime() !== d.EventEndDate.getTime() && diff <= 35) {
                     return diff / 2;
                 }
@@ -527,16 +545,16 @@ export class Visual implements IVisual {
             })
             .attr("cy", 0)
             .attr('r', 40)
-            .attr('stroke', function (d: TimelineData) {
+            .attr('stroke', (d: TimelineData) => {
                 let companyColor = companyColorData.find(c => d.Company === c.company);
                 return companyColor ? companyColor.color.light : '#000000';
             })
             .attr('stroke-width', 2)
             .attr('fill', 'rgba(0,0,0,0)');
 
-        gbox.selectAll('g')
+        this.gbox.selectAll('g')
             .data((d: any, i) => {
-                let diff = ((xScale(d.EventEndDate) + 25) - (xScale(d.EventStartDate) + 25));
+                let diff = ((this.xScale(d.EventEndDate) + 25) - (this.xScale(d.EventStartDate) + 25));
                 if (d.EventStartDate.getTime() === d.EventEndDate.getTime() || diff <= 35) {
                     return [d];
                 }
@@ -547,8 +565,8 @@ export class Visual implements IVisual {
             .enter()
             .append('a')
             .append("circle")
-            .attr("cx", function (d) {
-                let diff = ((xScale(d.EventEndDate) + 25) - (xScale(d.EventStartDate) + 25));
+            .attr("cx", (d) => {
+                let diff = ((this.xScale(d.EventEndDate) + 25) - (this.xScale(d.EventStartDate) + 25));
                 if (d.EventStartDate.getTime() !== d.EventEndDate.getTime() && diff <= 35) {
                     return diff / 2;
                 }
@@ -558,16 +576,19 @@ export class Visual implements IVisual {
             })
             .attr("cy", 0)
             .attr('r', 45)
-            .attr('stroke', function (d: TimelineData) {
+            .attr('stroke', (d: TimelineData) => {
                 let companyColor = companyColorData.find(c => d.Company === c.company);
                 return companyColor ? companyColor.color.medium : '#000000';
             })
             .attr('stroke-width', 4)
             .attr('fill', 'rgba(0,0,0,0)');
 
-        gbox.selectAll('g')
+    }
+
+    private renderEllipses(companyColorData) {
+        this.gbox.selectAll('g')
             .data((d: any, i) => {
-                let diff = ((xScale(d.EventEndDate) + 25) - (xScale(d.EventStartDate) + 25));
+                let diff = ((this.xScale(d.EventEndDate) + 25) - (this.xScale(d.EventStartDate) + 25));
                 if (d.EventStartDate.getTime() !== d.EventEndDate.getTime() && diff > 35) {
                     return [d];
                 }
@@ -577,31 +598,33 @@ export class Visual implements IVisual {
             })
             .enter()
             .append('ellipse')
-            .attr("cx", function (d: TimelineData, i) {
-                let diff = ((xScale(d.EventEndDate) + 25) - (xScale(d.EventStartDate) + 25));
-                let halfDiff = diff / 2;
-                return halfDiff;
+            .attr("cx", (d: TimelineData, i) => {
+                let diff = ((this.xScale(d.EventEndDate) + 25) - (this.xScale(d.EventStartDate) + 25));
+                return diff / 2;
             })
             .attr("cy", 2)
-            .attr("rx", function (d: TimelineData, i) {
-                return ((xScale(d.EventEndDate) + 25) - (xScale(d.EventStartDate) + 25));
+            .attr("rx", (d: TimelineData, i) => {
+                return ((this.xScale(d.EventEndDate) + 25) - (this.xScale(d.EventStartDate) + 25));
             })
             .attr("ry", 50)
-            .attr('stroke', function (d: TimelineData) {
+            .attr('stroke', (d: TimelineData) => {
                 let companyColor = companyColorData.find(c => d.Company === c.company);
                 return companyColor ? companyColor.color.light : '#000000';
             })
             .attr('stroke-width', 2)
             .attr('fill', 'rgba(0,0,0,0)');
 
-        gbox.append("foreignObject")
-            .html(function (d) {
+    }
+
+    private renderText(companyColorData) {
+        this.gbox.append("foreignObject")
+            .html((d) => {
                 let companyColor = companyColorData.find(c => d.Company === c.company);
                 let color = companyColor ? companyColor.color.medium : '#000000';
                 let company = '<div style="color:' + color + ';padding-left: 10px;">' + (d.Company ? sanitizeHtml(d.Company.toString()) : '') + '</div>';
                 return company + sanitizeHtml(d.Description);
             })
-            .attr('x', function (d) {
+            .attr('x', (d) => {
                 if (d.EventStartDate.getTime() === d.EventEndDate.getTime()) {
                     return -35;
                 }
@@ -610,13 +633,13 @@ export class Visual implements IVisual {
                 }
             })
             .attr('y', '-50')
-            .attr('width', function (d) {
+            .attr('width', (d) => {
                 if (d.EventStartDate.getTime() === d.EventEndDate.getTime()
-                    || _this.diff_years(d.EventEndDate, d.EventStartDate) < 1) {
+                    || this.diff_years(d.EventEndDate, d.EventStartDate) < 1) {
                     return 75;
                 }
                 else {
-                    let diff = ((xScale(d.EventEndDate) + 25) - (xScale(d.EventStartDate) + 25));
+                    let diff = ((this.xScale(d.EventEndDate) + 25) - (this.xScale(d.EventStartDate) + 25));
                     return diff + diff / 2;
                 }
             })
@@ -625,7 +648,10 @@ export class Visual implements IVisual {
             .attr('transform', 'translate(0,20)')
             .attr('font-size', 10)
             .attr('font-weight', 'bold');
+    }
 
+    private handleHyperLinkClick() {
+        let _this = this;
         let baseurl = 'https://strategicanalysisinc.sharepoint.com';
         this.svg.selectAll('foreignObject a')
             .on('click', function (e: Event) {
@@ -639,7 +665,9 @@ export class Visual implements IVisual {
                 d3.event.preventDefault();
                 return false;
             });
+    }
 
+    private renderVisualBorder(options) {
         this.svg.append('rect')
             .attr('class', 'visual-border-rect')
             .attr('x', 0)
@@ -649,16 +677,10 @@ export class Visual implements IVisual {
             .attr('stroke-width', '2px')
             .attr('stroke', '#333')
             .attr('fill', 'transparent');
-
-        this.events.renderingFinished(options);
     }
 
-    private prependZero(n) {
-        return n < 10 ? '0' + n : n;
-    }
-
-    /* converter to table data */
-    public static converter(dataView: DataView, host: IVisualHost): TimelineData[] {
+    // converter to table data
+    public static CONVERTER(dataView: DataView, host: IVisualHost): TimelineData[] {
         let resultData: TimelineData[] = [];
         let tableView = dataView.table;
         let _rows = tableView.rows;
@@ -701,7 +723,7 @@ export class Visual implements IVisual {
     }
 
     private static parseSettings(dataView: DataView): VisualSettings {
-        return VisualSettings.parse(dataView) as VisualSettings;
+        return <VisualSettings>VisualSettings.parse(dataView);
     }
 
     /**
